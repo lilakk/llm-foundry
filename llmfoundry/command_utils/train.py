@@ -5,7 +5,7 @@ import logging
 import os
 import time
 import warnings
-from typing import Any, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.distributed
@@ -153,7 +153,7 @@ def validate_config(train_config: TrainConfig):
             )
 
 
-def _log_num_params(model: ComposerModel, logged_cfg: dict[str, Any]):
+def _log_num_params(model: ComposerModel, logged_cfg: Dict[str, Any]):
     # Log number of parameters
     if hasattr(model, 'n_total_params'):
         n_params = model.n_total_params
@@ -256,7 +256,7 @@ def train(cfg: DictConfig) -> Trainer:
     train_loader_config = train_cfg.train_loader
 
     # Optional fsdp data, fine-tuning, and eval configs
-    fsdp_config: Optional[dict[str, Any]] = train_cfg.fsdp_config
+    fsdp_config: Optional[Dict[str, Any]] = train_cfg.fsdp_config
 
     if fsdp_config is not None:
         if 'load_planner' in fsdp_config:
@@ -368,15 +368,15 @@ def train(cfg: DictConfig) -> Trainer:
     profiler: Optional[Profiler] = None
     profiler_cfg = train_cfg.profiler
     if profiler_cfg:
-        profiler_schedule_cfg: dict = pop_config(
+        profiler_schedule_cfg: Dict = pop_config(
             profiler_cfg,
             'schedule',
             must_exist=True,
         )
         profiler_schedule = cyclic_schedule(**profiler_schedule_cfg)
         # Only support json trace handler
-        profiler_trace_handlers: list[TraceHandler] = []
-        profiler_trace_cfg: Optional[dict] = pop_config(
+        profiler_trace_handlers: List[TraceHandler] = []
+        profiler_trace_cfg: Optional[Dict] = pop_config(
             profiler_cfg,
             'json_trace_handler',
             must_exist=False,
@@ -395,7 +395,7 @@ def train(cfg: DictConfig) -> Trainer:
     callback_configs = train_cfg.callbacks or {}
 
     # Callbacks
-    callbacks: list[Callback] = [
+    callbacks: List[Callback] = [
         build_callback(
             name=str(name),
             kwargs=callback_cfg,
@@ -477,7 +477,7 @@ def train(cfg: DictConfig) -> Trainer:
         name=name,
         tokenizer=tokenizer,
         init_context=init_context,
-        master_weights_dtype=model_config.pop('master_weights_dtype', None),
+        master_weights_dtype=model_config.get('master_weights_dtype', None),
         cfg=model_config,
     )
 
@@ -507,46 +507,50 @@ def train(cfg: DictConfig) -> Trainer:
     compile_config = train_cfg.compile_config
     # Build the Trainer
     log.info('Building trainer...')
-    trainer = Trainer(
-        run_name=run_name,
-        seed=seed,
-        model=model,
-        train_dataloader=train_loader,
-        train_subset_num_batches=train_cfg.train_subset_num_batches,
-        eval_dataloader=evaluators,
-        optimizers=optimizer,
-        schedulers=scheduler,
-        max_duration=train_cfg.max_duration,
-        eval_interval=train_cfg.eval_interval,
-        eval_subset_num_batches=train_cfg.eval_subset_num_batches,
-        progress_bar=train_cfg.progress_bar,
-        log_to_console=train_cfg.log_to_console,
-        console_log_interval=train_cfg.console_log_interval,
-        loggers=loggers,
-        callbacks=callbacks,
-        precision=train_cfg.precision,
-        algorithms=algorithms,
-        device_train_microbatch_size=train_cfg.device_train_microbatch_size,
-        parallelism_config={'fsdp': fsdp_config},
-        save_folder=train_cfg.save_folder,
-        save_filename=save_filename,
-        save_latest_filename=save_latest_filename,
-        save_interval=train_cfg.save_interval,
-        save_num_checkpoints_to_keep=train_cfg.save_num_checkpoints_to_keep,
-        save_overwrite=train_cfg.save_overwrite,
-        save_weights_only=train_cfg.save_weights_only,
-        load_path=train_cfg.load_path,
-        load_weights_only=train_cfg.load_weights_only,
-        load_strict_model_weights=train_cfg.load_strict_model_weights,
-        load_ignore_keys=train_cfg.load_ignore_keys,
-        save_ignore_keys=train_cfg.save_ignore_keys,
-        autoresume=train_cfg.autoresume,
-        python_log_level=train_cfg.python_log_level,
-        dist_timeout=train_cfg.dist_timeout,
-        profiler=profiler,
-        compile_config=compile_config,
-        spin_dataloaders=train_cfg.spin_dataloaders,
-    )
+    trainer_args = {
+        'run_name': run_name,
+        'seed': seed,
+        'model': model,
+        'train_dataloader': train_loader,
+        'eval_dataloader': evaluators,
+        'optimizers': optimizer,
+        'schedulers': scheduler,
+        'max_duration': train_cfg.max_duration,
+        'eval_interval': train_cfg.eval_interval,
+        'eval_subset_num_batches': train_cfg.eval_subset_num_batches,
+        'progress_bar': train_cfg.progress_bar,
+        'log_to_console': train_cfg.log_to_console,
+        'console_log_interval': train_cfg.console_log_interval,
+        'loggers': loggers,
+        'callbacks': callbacks,
+        'precision': train_cfg.precision,
+        'algorithms': algorithms,
+        'device_train_microbatch_size': train_cfg.device_train_microbatch_size,
+        'parallelism_config': {'fsdp': fsdp_config},
+        'save_folder': train_cfg.save_folder,
+        'save_filename': save_filename,
+        'save_latest_filename': save_latest_filename,
+        'save_interval': train_cfg.save_interval,
+        'save_num_checkpoints_to_keep': train_cfg.save_num_checkpoints_to_keep,
+        'save_overwrite': train_cfg.save_overwrite,
+        'save_weights_only': train_cfg.save_weights_only,
+        'load_path': train_cfg.load_path,
+        'load_weights_only': train_cfg.load_weights_only,
+        'load_strict_model_weights': train_cfg.load_strict_model_weights,
+        'load_ignore_keys': train_cfg.load_ignore_keys,
+        'save_ignore_keys': train_cfg.save_ignore_keys,
+        'autoresume': train_cfg.autoresume,
+        'python_log_level': train_cfg.python_log_level,
+        'dist_timeout': train_cfg.dist_timeout,
+        'profiler': profiler,
+        'compile_config': compile_config,
+        'spin_dataloaders': train_cfg.spin_dataloaders,
+    }
+    if train_cfg.deepspeed_config is not None:
+        print("LOADING DEEPSPEED CONFIG")
+        print(train_cfg.deepspeed_config)
+        trainer_args['deepspeed_config'] = train_cfg.deepspeed_config
+    trainer = Trainer(**trainer_args)
 
     # Optionally just save an HF checkpoint
     if train_cfg.only_hf_checkpoint:
@@ -574,7 +578,7 @@ def train(cfg: DictConfig) -> Trainer:
 
     if train_cfg.log_config:
         log.info('Logging config')
-        log_config(trainer.logger, logged_cfg)
+        log_config(logged_cfg)
     log_dataset_uri(logged_cfg)
     torch.cuda.empty_cache()
     gc.collect()
@@ -592,7 +596,7 @@ def train(cfg: DictConfig) -> Trainer:
 
 def train_from_yaml(
     yaml_path: str,
-    args_list: Optional[list[str]] = None,
+    args_list: Optional[List[str]] = None,
 ) -> Trainer:
     """Run the training with optional overrides from CLI."""
     # Load yaml and CLI arguments.
